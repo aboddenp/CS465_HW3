@@ -23,6 +23,8 @@
 	Istr: .asciiz "I"
 	LINE:.asciiz "-------------------------------------------\n"
 	NONE: .asciiz "none" 
+	OPAREN: .asciiz "("
+	CPAREN: .asciiz ")"
 	
 	
 # End of Data Items
@@ -32,10 +34,12 @@ main:
 
 	###### stack allocation/ store reg ################
 	
-	addi $sp, $sp, -20
+	addi $sp, $sp, -24
 	sw $s0, 0($sp) #save $s0 value 
 	sw $s1, 4($sp) # save s1 address 
 	sw $ra, 8($sp) #save return address 
+	sw $s2, 16($sp) 
+	sw $s3, 20($sp)
 	
 	
 	la $a0, INIT_INPUT
@@ -89,9 +93,8 @@ main:
 												
 		addi $t0, $t0, 1
 		blt $t0, $t1, Loop
-	
 	# Instrunctios are integers and the base of the array is $s0 and its size is in $s1 
-	li $t0, 0 # loop counter	
+	li $s2, 0 # loop counter	
 	test1: 
 	
 		# print I 
@@ -100,7 +103,7 @@ main:
 		syscall 
 		
 		# print instruction number 
-		move $a0, $t0 
+		move $a0, $s2
 		li $v0, 1
 		syscall	
 		
@@ -115,11 +118,10 @@ main:
 		syscall 
 				
 		# get instruction from heap 
-		li $t2, 4  
-		mul $t2, $t2, $t0 # 4i 
-		add $t3, $s0, $t2 # base address + 4i 
-		lw $a0, 0($t3) # get integer address at index i 
-		sw $t0, 12($sp) # store count 	
+		li $s3, 4  
+		mul $s3, $s3, $s2 # 4i 
+		add $s3, $s0, $s3 # base address + 4i // current instruction in s3
+		lw $a0, 0($s3) # get integer address at index i 	
 		jal get_src_reg
 				
 		# print the source 
@@ -145,7 +147,7 @@ main:
 		li $v0, 4
 		syscall	
 		
-		lw $a0, 0($t3) # get integer address at index i 
+		lw $a0, 0($s3) # get integer address at index i 
 		jal get_dest_reg
 		li $t2, 32
 		bne $v0, $t2, pdest
@@ -167,12 +169,155 @@ main:
 		li $v0, 4
 		syscall	
 		
-		#print that there is no dependancy 
+		#check if there is an instruction before this one 
+		addi $t0, $s2, -1 # index -1 
+		blt $t0, $zero, nodep
+		# check the instruction before this one 
+
+		addi $t1, $s3, -4 
+		lw $a1, 0($t1) # get integer address at index i - 1	
+		lw $a0, 0($s3) 
+		jal readWrite # get dependancy
+		sw $v0, 12($sp) 
+		# set default
+		li $v0, 0 
+		li $v1, 0 
 		
+		#check if there is an instruction 2 before this one
+		addi $t0, $s2, -2 #index - 2
+		blt $t0, $zero, dependone
+		# check the instruction 2 before this one 
+		
+		addi $t2, $s3, -8  
+		lw $a1, 0($t2) # get integer address at index i - 2
+		lw $a0, 0($s3)
+		jal readWrite # get dependancy
+		
+		dependone: # have result of dependancy 
+		lw $t0, 12($sp) # restore first dependancy 
+		
+		bne $v0, $zero, printOldest  # depen in i - 2 
+		bne $t0, $zero, printNew # only dependancy in i - 1
+		j nodep # there are no dependancy 
+		
+		#print oldest dependancy 
+		printOldest: 
+			# if two dependancy's with the same registers print only newest
+			beq $t0, $v0, printNew
+			beq $t0, $zero, cont # there is no dependancy there is no need to check i - 1 instruction type 
+			
+			# if the newest is a load instruction and has a dependancy, skip oldest because of forwarding
+			addi $t1, $s3, -4 
+			lw $t1, 0($t1) # get integer address at index i - 1	
+			srl $t1, $t1, 26
+			li $t2, 0x23
+			beq $t2, $t1, printNew  # skip and only print dependancy with load
+			
+			cont: 	# continue with i - 2
+			move $t1, $v0 # move dependancy to t1 before syscall changes v0
+			# print the oldest dependancy: 
+			
+			# print register with dependancy 
+			
+			la $a0, OPAREN # open parenthesis 
+			li $v0, 4
+			syscall 
+			
+			move $a0, $t1
+			li $v0, 1
+			syscall
+			
+			la $a0, COMMA 
+			li $v0, 4
+			syscall 
+			
+			# print I 
+			la $a0, Istr
+			li $v0, 4
+			syscall 
+			# print producer:
+			addi $t2, $s2, -2
+			move $a0, $t2
+			li $v0, 1
+			syscall	
+			
+			la $a0, COMMA 
+			li $v0, 4
+			syscall 
+						
+			# print I 
+			la $a0, Istr
+			li $v0, 4
+			syscall 	
+			#print consumer: 
+			move $a0, $s2
+			li $v0, 1
+			syscall		
+			
+			la $a0, CPAREN # close parenthesis
+			li $v0, 4
+			syscall 	
+			
+			bne $zero, $t0, newSeparate # if there is another dependancy in i - 1 print it 
+			j nl # only one dependancy 
+			
+			newSeparate:
+				la $a0, COMMA 
+				li $v0, 4
+				syscall 				
+			
+		#print newest dependancy 
+		printNew:
+		
+			la $a0, OPAREN
+			li $v0, 4
+			syscall 
+			
+			# print register with dependancy 
+			move $a0, $t0
+			li $v0, 1
+			syscall
+
+			la $a0, COMMA 
+			li $v0, 4
+			syscall 
+			
+			# print I 
+			la $a0, Istr
+			li $v0, 4
+			syscall 
+			# print producer:
+			addi $t2, $s2, -1
+			move $a0, $t2
+			li $v0, 1
+			syscall	
+
+			la $a0, COMMA 
+			li $v0, 4
+			syscall 			
+
+			# print I 
+			la $a0, Istr
+			li $v0, 4
+			syscall 		
+			#print consumer: 
+			move $a0, $s2
+			li $v0, 1
+			syscall	
+	
+			la $a0, CPAREN
+			li $v0, 4
+			syscall 	 
+			
+		j nl 
+		
+		#print that there is no dependancy 
+		nodep: # there are no dependancy 
 		la $a0, NONE 
 		li $v0, 4
 		syscall	
 		
+		nl:
 		la $a0, NEWLINE
 		li $v0, 4
 		syscall 
@@ -182,16 +327,17 @@ main:
 		li $v0, 4
 		syscall 
 		
-		lw $t0, 12($sp) #restore count 
-		addi $t0, $t0, 1
-		blt $t0, $s1, test1
+		addi $s2, $s2, 1
+		blt $s2, $s1, test1
 	  
 exit:
-	#restore stack and regs to original values
-	lw $s0, 0($sp) 
-	lw $s1, 4($sp)
-	lw $ra, 8($sp) # restore return address 
-	addi $sp, $sp, 20
+	#restore stack and register values 
+	lw $s0, 0($sp)  # used as base address
+	lw $s1, 4($sp)  # used as size of array
+	lw $ra, 8($sp)  
+	lw $s2, 16($sp) #used as main loop counter 
+	lw $s3, 20($sp) #used as current instruction in main loop 
+	addi $sp, $sp, 24 #restore stack
 	
 	li $v0, 10
 	syscall
@@ -392,6 +538,38 @@ get_src_reg:
 	addi $sp, $sp, 12
 	jr $ra 
 	
+# this function checks if instruction at $a0 reads what instruction at $a1 writes, if so it returns the value in $v0 else returns 0 
+readWrite: 
+	# store values and return address
+	addi $sp, $sp, -12
+	sw $ra, 0($sp)
+	sw $s0, 4($sp)
+
+	#store 1st param value 
+	sw $a0, 8($sp) 
+	add $a0, $a1, $zero # set paramter to pass 
+	jal get_dest_reg
+	# get destionation of $a1 
+	add $s0, $v0, $zero 
+	
+	#get source of $a0
+	lw $a0 8($sp) 
+	jal get_src_reg 
+		
+	#check if any of the source registers match with $a1 destination 
+
+	#set return value 
+	beq $v0, $s0, fin # check if $v0 is already equal to destination register
+	add $v0, $s0, $zero # set return value to destination register 
+	beq $v1, $s0, fin # checks if second source is eqal to destination register 
+	li $v0, 0 # defualt no dependancy 
+	
+	fin: 
+		#prepare return value 
+		lw $ra, 0($sp)
+		lw $s0, 4($sp)
+		addi $sp, $sp, 12
+		jr $ra 	
 
 # Helper subroutines 
 getOpcode: 

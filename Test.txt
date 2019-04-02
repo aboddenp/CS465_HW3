@@ -11,6 +11,7 @@ complete:
 12128008
 8E0B1991
 AE901245
+0253A020
 
 answers: 
 1. src: s0(16)  dest: s0(16) / addi
@@ -22,6 +23,7 @@ answers:
 7. src: s0(16), s2(18),  dest: none / beq 
 8. src: s0(16) dest: t3(11) / lw 
 9. src: s4(20) s0(16) dest: none 
+10. src: s2(18), s3(19), dest: s4(20)
 
 I0: Source registers: 16
 	Destination register: 16
