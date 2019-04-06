@@ -53,3 +53,13 @@ I8: Source registers: 20, 16
 	Destination register: 
 	Dependences: 
 
+8E900005 lw s0 0x2 s4
+014B4020 add t0 t2 t3
+AE700003 sw s0 0x3 s3
+
+this should not take any dependancy's
+
+02CBA820 add s5 s6 t3 
+8D730003 lw s3 0x2 s4
+AEB30003 sw s3 0x3 s5
+# there should be a dependancy on both s3 and s5 since lw and sw will not create  a bubble 

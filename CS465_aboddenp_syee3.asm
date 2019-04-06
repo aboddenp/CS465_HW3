@@ -34,7 +34,7 @@ main:
 
 	###### stack allocation/ store reg ################
 	
-	addi $sp, $sp, -24
+	addi $sp, $sp, -28
 	sw $s0, 0($sp) #save $s0 value 
 	sw $s1, 4($sp) # save s1 address 
 	sw $ra, 8($sp) #save return address 
@@ -179,9 +179,11 @@ main:
 		lw $a0, 0($s3) 
 		jal readWrite # get dependancy
 		sw $v0, 12($sp) 
+		sw $v1, 24($sp)
 		# set default
 		li $v0, 0 
-		li $v1, 0 
+		#li $v1, 0 
+		
 		
 		#check if there is an instruction 2 before this one
 		addi $t0, $s2, -2 #index - 2
@@ -204,15 +206,34 @@ main:
 		printOldest: 
 			# if two dependancy's with the same registers print only newest
 			beq $t0, $v0, printNew
-			beq $t0, $zero, cont # there is no dependancy there is no need to check i - 1 instruction type 
+			#beq $t0, $zero, cont # there is no dependancy there is no need to check i - 1 instruction type 
 			
 			# if the newest is a load instruction and has a dependancy, skip oldest because of forwarding
 			addi $t1, $s3, -4 
 			lw $t1, 0($t1) # get integer address at index i - 1	
 			srl $t1, $t1, 26
-			li $t2, 0x23
-			beq $t2, $t1, printNew  # skip and only print dependancy with load
+			li $t2, 0x23 
+			beq $t2, $t1, MEM1  # there is a load dependancy in i-1 
 			
+			# if the i-2 is a load instruction check if current instruction is a sw and dependancy is on register 
+			# that will be stored to memory and not to EXE stage 
+			
+			addi $t1, $s3, -8
+			lw $t1, 0($t1) # get integer address at index i - 2	
+			srl $t1, $t1, 26
+			li $t2, 0x23 # there is a load dependancy in i-2 dependacy 
+			beq $t2, $t1, MEM2  # there is a load dependancy in i-2 
+			
+			j cont 
+			#check whether it is a MEM to MEM dependancy 
+			MEM1: #load word is in i - 1
+				lw $t4, 24($sp) # restore sw memory flag
+				li $t3, 1 
+				bne $t3, $t4, printNew # skip only if there is no Mem to Mem dependancy
+			MEM2: # load word is in i - 2
+				li $t3, 1 
+				beq $v1, $t4, printNew # skip if there is a Mem to Mem dependancy
+				
 			cont: 	# continue with i - 2
 			move $t1, $v0 # move dependancy to t1 before syscall changes v0
 			# print the oldest dependancy: 
@@ -337,7 +358,7 @@ exit:
 	lw $ra, 8($sp)  
 	lw $s2, 16($sp) #used as main loop counter 
 	lw $s3, 20($sp) #used as current instruction in main loop 
-	addi $sp, $sp, 24 #restore stack
+	addi $sp, $sp, 28 #restore stack
 	
 	li $v0, 10
 	syscall
@@ -539,6 +560,7 @@ get_src_reg:
 	jr $ra 
 	
 # this function checks if instruction at $a0 reads what instruction at $a1 writes, if so it returns the value in $v0 else returns 0 
+# v1 will only return 1 if the instruction is a sw and the dependancy comes from the value to store in memory
 readWrite: 
 	# store values and return address
 	addi $sp, $sp, -12
@@ -553,16 +575,30 @@ readWrite:
 	add $s0, $v0, $zero 
 	
 	#get source of $a0
-	lw $a0 8($sp) 
+	lw $a0, 8($sp) 
 	jal get_src_reg 
-		
-	#check if any of the source registers match with $a1 destination 
+	
 
-	#set return value 
+	#check if any of the source registers match with $a1 destination 
+	
 	beq $v0, $s0, fin # check if $v0 is already equal to destination register
 	add $v0, $s0, $zero # set return value to destination register 
-	beq $v1, $s0, fin # checks if second source is eqal to destination register 
+	
+		
+	match2:
+	
+	beq $v1, $s0, check_sw # checks if second source is equal to destination register 
+
+	li $v1, 0 # defualt no MEM sw Dependancy
 	li $v0, 0 # defualt no dependancy 
+
+	#check sw
+	check_sw: 
+			# check whether this is a sw instruction 
+		srl $a0, $a0, 26
+		li $t2, 0x2b
+		bne $t2, $a0, fin
+		li $v1, 1	
 	
 	fin: 
 		#prepare return value 
