@@ -63,3 +63,9 @@ this should not take any dependancy's
 8D730003 lw s3 0x2 s4
 AEB30003 sw s3 0x3 s5
 # there should be a dependancy on both s3 and s5 since lw and sw will not create  a bubble 
+
+02CBA820 add s3 s6 t3 
+8D730003 lw s5 0x2 s4
+AE750003 sw s3 0x3 s5
+# only one dependancy lw and sw prodces a bubble 
+

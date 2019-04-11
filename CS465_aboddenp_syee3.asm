@@ -129,7 +129,8 @@ main:
 		li $v0, 1
 		syscall
 		
-		beq $v1, $zero, destination 	# there is no second source register 
+		li $t7, -1
+		beq $v1, $t7, destination 	# there is no second source register 
 		
 		# print second source 
 		la $a0, COMMA 
@@ -518,7 +519,7 @@ get_dest_reg:
 		jr $ra
 		
 # This function gets the source_register from instruction in $a0 if the instruction has more than two source $v1 
-# will have the value of the second source register otherwise its value is 0 
+# will have the value of the second source register otherwise its value is -1
 get_src_reg: 
 	#store items in the stack 
 	addi $sp, $sp, -12 
@@ -539,7 +540,7 @@ get_src_reg:
 	jal getOpcode 
 	li $t0, 0x23 #load word
 	li $t1, 0x08 # addi
-	li $v1, 0 # 0 when no second source is used 
+	li $v1, -1 # -1 when no second source is used 
 	beq $v0, $t0, complete
 	beq $v0,$t1, complete
 	# two source registers needed for this instruction 
